@@ -65,6 +65,8 @@ def recvmessage(sock):
 
 from message import Message
 
+user_sock = {}
+
 def process(m, sock):
 	print "1"
 	if m.type == "login_request" :
@@ -77,11 +79,23 @@ def process(m, sock):
 			print "Login success, sending"
 			send_message(sock, msg)
 			OnlineUsers.append(m.username)
+			user_sock[m.username] = sock
 			print "Login success, sent"
+			msg2 = Message()
+			msg2.type = "new_login"
+			msg2.new_user = m.username
+			for user in OnlineUsers:
+				if user!=m.username:
+					send_message(user_sock[user],msg2)
+					print user
+
 		else:
 			msg.type = "login_failure"
 			print "Login fail"
 			send_message(sock, msg)
+
+	if m.type == "chat" :
+		print "yaaaay"
 
 	pass
 
@@ -145,6 +159,7 @@ while True:
 				# 	print "error in receiving"
 	except:
 		server_socket.close()
+
 # print("Connection %s"% str(addr))
 # while True:
 # 	# curr=time.ctime(time.time())+"\r\n"
