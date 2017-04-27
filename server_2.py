@@ -3,9 +3,10 @@ import socket,time,threading, select
 import message
 # import thread
 import csv
-import pandas as pd
 
 MTU = 16
+
+allthechats = {}
 
 def break_message(msg):
 	frags = []
@@ -38,13 +39,15 @@ def add_user(username,passwd):
 fragments = {}
 
 def recvmessage(sock):
+	print "receiving"
 	pkt = sock.recv(MTU)
+	print "46"
 	if sock not in fragments:
 		fragments[sock] = ""
 	if pkt.decode("ascii")=="":
 		msg = Message()
 		msg.type = "disconnected"
-		print "Disconnected from client"
+		print "received"
 		return msg
 	else:
 		print(pkt.decode("ascii"))
@@ -66,19 +69,20 @@ from message import Message
 user_sock = {}
 
 def process(m, sock):
-	# print "1"
-	if m.type == "login_request" or m.type=="register":
-		# print "2"
+	print "1"
+	if m.type == "login_request" :
+		print "2"
 		if is_valid_user(m.username, m.password) :
-			# print "3"
+			print "3"
 			msg = Message()
-			if m.type == "login_request":
-				msg.type = "login_success"
-			else:
-				msg.type = "register_success"
-				msg.duplicate=True
-			msg.otherusers = OnlineUsers
-			msg.name = user_data[m.username]["name"]
+			msg.type = "login_success"
+			Online_friends = []
+			for x in user_data[m.username]["friends"]:
+				if x in OnlineUsers:
+					Online_friends.append(x)
+			msg.otherusers = Online_friends
+			#Now we need to send only this user's friend list
+			
 			print "Login success, sending"
 			send_message(sock, msg)
 			OnlineUsers.append(m.username)
@@ -88,62 +92,77 @@ def process(m, sock):
 			msg2.type = "new_login"
 			msg2.new_user = m.username
 			for user in OnlineUsers:
-				if user!=m.username:
+				if (user!=m.username) and (user in user_data[m.username]["friends"]):
 					send_message(user_sock[user],msg2)
 					print user
 
 		else:
-			if msg.type=="login_request":
-				msg = Message()
-				msg.type = "login_failure"
-				print "Login fail"
-				send_message(sock, msg)
-			else:
-				new_user={}
-				new_user["username"] = m.username
-				new_user["password"] = m.password
-				new_user["name"] = m.name
-				user_data[new_user["username"]] = new_user
-				msg = Message()
-				msg.type = "register_success"
-				msg.duplicate=False
-				msg.otherusers = OnlineUsers
-				send_message(sock,msg)
-				print "New signup"
-				OnlineUsers.append(m.username)
-				user_sock[m.username] = sock
-				msg2 = Message()
-				msg2.type = "new_login"
-				msg2.new_user = m.username
-				for user in OnlineUsers:
-					if user!=m.username:
-						send_message(user_sock[user],msg2)
-						print user
+			msg.type = "login_failure"
+			print "Login fail"
+			send_message(sock, msg)
 
-	elif m.type == "chat" :
+	if m.type == "chat" :
 		failmsg = Message()
 		failmsg.content = m.destination + " is offline"
 		failmsg.type = "fail_msg"
+		print
+		if m.sender < m.destination :
+			print "part1"
+			temptuple = allthechats[m.sender+","+m.destination] 
+			temptuple.append((m.sender,m.content))
+			allthechats[m.sender+","+m.destination] = temptuple 
+		else:
+			print "part2"
+			temptuple = allthechats[m.destination+","+m.sender] 
+			temptuple.append((m.sender,m.content))
+			allthechats[m.destination+","+m.sender] = temptuple
+
+		print allthechats
 
 		if m.destination in OnlineUsers :
 			send_message(user_sock[m.destination], m)
 		else:
-		 	send_message(sock,  failmsg)
+		 	send_message(sock,failmsg)
 
-	
-	elif m.type == "disconnected" :
+	if m.type == "chat_history" :
+		if ((m.sender+","+m.content) not in allthechats) and ((m.content+","+m.sender) not in allthechats) :
+			print "convo not present yet"
+			if m.sender < m.content :
+				print "exex"
+				temptuple = [] 
+				allthechats[m.sender+","+m.content] = temptuple 
+			else:
+				print "fdfd"
+				temptuple = [] 
+				allthechats[m.content+","+m.sender] = temptuple
+		print "power"
+		msgf = Message()
+		msgf.type = "chat_history_resp"
+		if m.sender < m.content :
+			msgf.content = allthechats[m.sender+","+m.content]
+			
+		else: 
+			msgf.content = allthechats[m.content+","+m.sender]
+
+		print msgf.content
+
+		send_message(sock, msgf)
+
+
+	if m.type == "disconnected" :
 		for ppl in user_sock:
 			if user_sock[ppl] == sock:
 				OnlineUsers.remove(ppl)
 				CONNECTION_LIST.remove(sock)
 				usertobedeleted = ppl
 		user_sock.pop(usertobedeleted, None)
-	# send evry1 notification that user has gone offline
+	# send notification to friends of this offline user that user has gone offline
 		msgx = Message()
 		msgx.type = "user_offline"
-		msgx.data = usertobedeleted
+		msgx.content = usertobedeleted
 		for userx in OnlineUsers:
-			send_message(user_sock[userx], msgx)
+			if userx in user_data[usertobedeleted]["friends"]:
+				send_message(user_sock[userx], msgx)
 	pass
 
 import json
@@ -200,8 +219,8 @@ while True:
 				if data!=None:
 					print data.toJSON()
 					process(data, sock)
-				# else:
-				# 	print "More fragments to come"
+				else:
+					print "More fragments to come"
 				# except:
 				# 	print "error in receiving"
 	except:
@@ -224,4 +243,3 @@ while True:
 # 		client,addr=s.accept()
 # 		print("Connection %s"% str(addr))
 # print(msg)
-

@@ -1,0 +1,348 @@
+3,4c3
+< import tkinter as tk
+< import tkinter.scrolledtext as tkst
+---
+> import Tkinter as tk
+12a12,13
+> #create an INET, STREAMing socket
+> open=False
+17c18
+< def recv_message(sock):
+---
+> def recvmessage(sock):
+18a20
+>     print "1"
+19a22
+>     print "2"
+23a27,28
+>     else:
+>         print(pkt.decode("ascii"))
+30d34
+<         print "Recv : "+full_msg.toJSON()
+33,34d36
+<     
+< 
+51,52c53,54
+<     sock.sendall(''.join(str(elem) for elem in messagefragments)) 
+<     print "Sent : "+msg.toJSON()
+---
+>     sock.sendall(''.join(str(elem) for elem in messagefragments))
+>     print "sent"
+55,95d56
+< #states
+< WAITING_FOR_USERNAME="waiting_for_username"
+< WAITING_FOR_PASSWORD="waiting_for_password"
+< CONNECTING="connecting"
+< AUTHENTICATING="authenticatong"
+< SELECT_USER="select_user"
+< CONVERSING="conversing"
+< 
+< import ldap
+< 
+< def login(username, password):
+< 
+<     try:
+<         ldap_con = ldap.open("cs252lab.cse.iitb.ac.in")
+<         print "Connected to LDAP server"
+<     except:
+<         print "Error connecting to LDAP server"
+<         sys.exit(1)
+< 
+<     opts = "cn="+username+",dc=cs252lab,dc=cse,dc=iitb,dc=ac,dc=in"
+< 
+<     try:
+<         ldap_con.simple_bind_s(opts,password)
+<         print "Authenticated by LDAP server"
+<     except:
+<         print "Invalid username or password"
+<         return -1
+< 
+<     msg = Message()
+<     msg.type = "login_request"
+<     msg.username = username
+<     msg.password = password
+< 
+<     send_message(server_sock,msg)
+<     print "Sent authentification request to chat server"
+< 
+<     listen_thread = threading.Thread(target=listen)
+<     listen_thread.daemon = True
+<     listen_thread.start()
+< 
+<     return 0
+98,100c59
+<     inp = ui.entry_text.get()
+<     ui.entry_text.set("")
+<     global state, client_username, client_password, server_sock, port, online_users, current_dst
+---
+>     global state, username, password, server_sock, port, online_friends, current_dst
+102,112c61,63
+<     if state==WAITING_FOR_USERNAME:
+<         print "Got client's username"
+<         client_username = inp
+<         print "Username = "+client_username
+<         ui.clear_chat()
+<         ui.input.config(show="*")
+<         ui.append_chat(None, "Enter password: ")
+<         state = WAITING_FOR_PASSWORD
+<     elif state==WAITING_FOR_PASSWORD:
+<         print "Got client's password"
+<         client_password = inp
+---
+>     if state=="waiting_for_username":
+>         username = ui.entry_text.get()
+>         print "Username = "+username
+114,115d64
+<         ui.clear_chat()
+<         ui.input.config(show="")
+117,120c66,73
+<         success = login(client_username, client_password)
+< 
+<         if success<0:
+<             state = WAITING_FOR_USERNAME
+---
+>         ui.clear_chat()
+>         # ui.input.config(show="*")
+>         ui.append_chat(None, "Enter password: ")
+>         state = "waiting_for_password"
+>     elif state=="waiting_for_password" or state=="failed_connecting":
+>         if state=="waiting_for_password":
+>             password = ui.entry_text.get()
+>             ui.entry_text.set("")
+122,126c75,76
+<             ui.append_chat(None, "Invalid username or password")
+<             ui.append_chat(None, "Enter password: ")
+<         else:
+<             state = AUTHENTICATING
+<     elif state==CONVERSING:
+---
+>             # ui.input.config(show="")
+>             ui.append_chat(None, "Connecting... ")
+128c78,83
+<         if inp == "\\clear":
+---
+>         try:
+>             server_sock.connect(("127.0.0.1", port))
+>             print "Connected to server"
+>         except socket.error:
+>             print(socket.error)
+>             state="failed_connecting"
+130,131c85,103
+<         elif inp == "\\list":
+<             state = SELECT_USER
+---
+>             ui.append_chat(None, "Failed to connect. Press Enter to retry.")
+>             return
+> 
+>         msg = Message()
+>         msg.type = "login_request"
+>         msg.username = username
+>         msg.password = password
+> 
+>         send_message(server_sock,msg)
+>         state = "connecting"
+>         listen_thread = threading.Thread(target=listen)
+>         listen_thread.daemon = True
+>         listen_thread.start()
+> 
+>     elif state=="conversing":
+>         print "conversing"
+>         txt = ui.entry_text.get()
+> 
+>         if txt == "\\clear":
+133,143c105,108
+<             if len(online_users)==0:
+<                 ui.append_chat(None,"Waiting for other users to come online...")
+<             else:
+<                 ui.append_chat(None,"Following users are online:-")
+<                 for user in online_users:
+<                     ui.append_chat(None,user)
+< 
+<         elif inp.split()[0] == '\\connect':
+<             next_dst = inp.split()[1]
+<             if next_dst not in online_users:
+<                 ui.append_chat("(Please select a user from list)")
+---
+>         elif txt.split()[0] == "\\connect":
+>             us = txt.split()[1]
+>             if us not in online_friends:
+>                 ui.append_chat("Please select a friend from list")
+145c110,116
+<                 current_dst = next_dst    
+---
+>                 current_dst = us
+>                 msghistory = Message()
+>                 msghistory.type = "chat_history"
+>                 msghistory.content = user
+>                 msghistory.sender = username
+>                 send_message(server_sock, msghistory)
+> 
+148,149c119,120
+<             ui.append_chat("You",inp)
+<             msg.content = inp
+---
+>             ui.append_chat("You",txt)
+>             msg.content = txt
+154a126
+> 
+156c128,129
+<         user = inp
+---
+>         print "select_user"
+>         user = ui.entry_text.get()
+158,161c131,135
+<         print online_users
+<         if user not in online_users and len(online_users)>0:
+<             ui.append_chat(None, "Please select a user from list")
+<         elif len(online_users)>0:
+---
+>         print online_friends
+>         ui.append_chat(None,"Select a friend from List to chat with")
+>         if user not in online_friends:
+>             ui.append_chat(None, "Please select a friend from list")
+>         else:
+163,164c137,138
+<             print "Second person set to "+current_dst
+<             state = CONVERSING
+---
+>             print " current dest  = " + current_dst
+>             state = "conversing"
+166c140,145
+<             
+---
+>             msghistory = Message()
+>             msghistory.type = "chat_history"
+>             msghistory.content = user
+>             msghistory.sender = username
+>             send_message(server_sock, msghistory)
+> 
+171,172d149
+<     global server_sock
+<     server_sock.close()
+174c151
+<     sys.exit(0)
+---
+>     exit(0)
+194c171
+<         self.append_chat(None, "Enter username: (\\register to register to chat server)")
+---
+>         self.append_chat(None, "Enter username: ")
+211a189
+>         print "Cleared screen"
+221,223c199,201
+< state = CONNECTING
+< client_username = None
+< client_password = None
+---
+> state = "waiting_for_username"
+> username = None
+> password = None
+227,239c205,214
+< def connect():
+<     global state
+<     while state==CONNECTING:
+<         try:
+<             print "Trying to connect to chat server"
+<             server_sock.settimeout(5)
+<             server_sock.connect(("127.0.0.1", port))
+<             print "Connected to chat server"
+<             state = WAITING_FOR_USERNAME
+<         except socket.error:
+<             ui.append_chat(None, "Connection to chat server timed out. Retrying in 5 seconds...")
+<             sleep(5000)
+<     
+---
+> 
+> ui = UI()
+> 
+> client_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+> 
+> 
+> clear = False
+> online_friends = set()
+> current_dst = None
+> # def listen():
+242a218
+>         print "1"
+244c220
+<             msg = recv_message(server_sock)
+---
+>             msg = recvmessage(server_sock)
+247,265c223,233
+<             if state == AUTHENTICATING:
+<                 if msg.type=="login_success":
+<                     ui.clear_chat()
+<                     state = SELECT_USER
+<                     print msg.otherusers
+<                     if len(msg.otherusers)==0:
+<                         ui.append_chat(None,"Waiting for other users to come online...")
+<                     else:
+<                         ui.append_chat(None,"Following users are online:-")
+<                         for user in msg.otherusers:
+<                             ui.append_chat(None,user)
+<                             online_users.add(user)
+<                     print "Logged in to chat server"
+<                 elif msg.type=="login_failure":
+<                     ui.clear_chat()
+<                     ui.append_chat(None,"User not registered")
+<                     ui.append_chat(None, "Enter username: (\\register to register to chat server)")
+<                     state = WAITING_FOR_USERNAME
+<                     print "Failed to log in to chat server"
+---
+>             if msg.type=="login_success" and state == "connecting":
+>                 ui.clear_chat()
+>                 print msg.toJSON()
+>                 state = "select_user"
+>                 if len(msg.otherusers)==0:
+>                     ui.append_chat(None,"Waiting for other users to come online...")
+>                 else:
+>                     ui.append_chat(None,"Following friends are online:-")
+>                     for user in msg.otherusers:
+>                         ui.append_chat(None,user)
+>                         online_friends.add(user)
+267c235
+<                 if state==CONVERSING and current_dst==msg.sender:
+---
+>                 if state=="conversing" and current_dst==msg.sender:
+272,273c240
+<                 online_users.add(msg.new_user)
+<                 if state==SELECT_USER:
+---
+>                 if not online_friends:
+275,281c242,244
+<                     ui.append_chat(None,"Following users are online:-")
+<                     for user in online_users:
+<                         ui.append_chat(None,user)
+<                         online_users.add(user)
+<                 else:
+<                     ui.append_chat(None,"(" + msg.new_user + " came online)")
+< 
+---
+>                     ui.append_chat(None,"Following friends are online:-")
+>                 online_friends.add(msg.new_user)
+>                 ui.append_chat(None,msg.new_user)
+283,292c246,247
+<                 ui.append_chat(None, "("+msg.data + " has gone offline)")
+<                 online_users.remove(msg.data)
+< 
+< 
+< ui = UI()
+< connect()
+< 
+< clear = False
+< online_users = set()
+< current_dst = None
+---
+>                 ui.append_chat(None, msg.content + " has gone offline ")
+>                 online_friends.remove(msg.content)
+293a249,258
+>             elif msg.type == "chat_history_resp" :
+>                 ui.clear_chat()
+>                 ui.entry_text.set("")
+>                 conversation = msg.content
+>                 for parts in conversation:
+>                     if parts[0] == username :
+>                         ui.append_chat("You", parts[1])
+>                     else :
+>                         ui.append_chat(parts[0], parts[1])
+>                 
